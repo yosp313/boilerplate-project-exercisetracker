@@ -13,22 +13,17 @@ const userSchema = new mongoose.Schema({
   username: String,
 });
 const exerciseSchema = new mongoose.Schema({
-  username: String,
-  userId: String,
+  userId: {
+    type: String,
+    required: true,
+  },
   description: String,
   duration: Number,
   date: Date,
 });
-const logSchema = new mongoose.Schema({
-  username: String,
-  userId: String,
-  count: Number,
-  log: [exerciseSchema],
-});
 
 const User = mongoose.model("User", userSchema);
 const Exercise = mongoose.model("Exercise", exerciseSchema);
-const Log = mongoose.model("Log", logSchema);
 
 app.use(cors());
 app.use(express.static("public"));
@@ -52,41 +47,28 @@ app.post("/api/users/:_id/exercises", async (req, res) => {
   const userId = req.params._id;
   const description = req.body.description;
   const duration = req.body.duration;
-  let date = req.body.date;
-  const username = await User.findById(userId)
-    .then((user) => {
-      return user.username;
-    })
-    .catch((err) => {
-      console.log(err);
-    });
+  const date = req.body.date;
 
-  if (date === "") {
-    date = new Date().toDateString();
-  }
+  const user = await User.findById(userId);
 
-  const exercise = new Exercise({
-    username: username,
+  const exerciseObj = new Exercise({
+    userId: userId,
     description: description,
     duration: duration,
-    date: date,
-    userId: userId,
+    date: date ? new Date(date) : new Date(),
   });
 
-  exercise
-    .save()
-    .then(() => {
-      res.json({
-        username: username,
-        description: description,
-        duration: duration,
-        date: date,
-        _id: userId,
-      });
-    })
-    .catch((err) => {
-      console.log(err);
-    });
+  const exercise = await exerciseObj.save().catch((err) => {
+    console.log(err);
+  });
+
+  res.json({
+    _id: userId,
+    username: user.username,
+    date: new Date(exercise.date).toDateString(),
+    duration: exercise.duration,
+    description: exercise.description,
+  });
 });
 
 app.get("/api/users", async (req, res) => {
@@ -96,19 +78,34 @@ app.get("/api/users", async (req, res) => {
 
 app.get("/api/users/:_id/logs", async (req, res) => {
   const userId = req.params._id;
-  const username = await User.findById(userId).then((user) => {
-    return user.username;
-  });
-  const count = await Exercise.find({ userId: userId }).countDocuments();
+  const user = await User.findById(userId);
+  const { from, to, limit } = req.query;
 
-  const log = await Exercise.find({ userId: userId }).then((exercises) => {
-    return exercises.map((exercise) => {
-      return {
-        description: exercise.description,
-        duration: Number(exercise.duration),
-        date: exercise.date.toDateString(),
-      };
-    });
+  const exercise = await Exercise.find({ userId: userId });
+
+  let logs = exercise.map((e) => ({
+    description: e.description,
+    duration: e.duration,
+    date: new Date(e.date).toDateString(),
+  }));
+
+  const count = logs.length;
+
+  if (from) {
+    logs = logs.filter((e) => new Date(e.date) >= new Date(from));
+  }
+  if (to) {
+    logs = logs.filter((e) => new Date(e.date) <= new Date(to));
+  }
+  if (limit) {
+    logs = logs.slice(0, limit);
+  }
+
+  res.json({
+    _id: user._id,
+    username: user.username,
+    count: count,
+    log: logs,
   });
 });
 
