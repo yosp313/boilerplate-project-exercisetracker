@@ -7,7 +7,7 @@ const mongoose = require("mongoose");
 mongoose
   .connect(process.env.MONGO_URL)
   .then(() => console.log("Connected to MongoDB"))
-  .catch((err) => console.error("Could not connect to MongoDB", err));
+  .catch((err) => console.error("Could not connect to MongoDB"));
 
 const userSchema = new mongoose.Schema({
   username: String,
@@ -53,12 +53,16 @@ app.post("/api/users/:_id/exercises", async (req, res) => {
   const description = req.body.description;
   const duration = req.body.duration;
   let date = req.body.date;
-  const username = await User.findById(userId).then((user) => {
-    return user.username;
-  });
+  const username = await User.findById(userId)
+    .then((user) => {
+      return user.username;
+    })
+    .catch((err) => {
+      console.log(err);
+    });
 
   if (date === "") {
-    date = new Date();
+    date = new Date().toDateString();
   }
 
   const exercise = new Exercise({
@@ -69,15 +73,20 @@ app.post("/api/users/:_id/exercises", async (req, res) => {
     userId: userId,
   });
 
-  exercise.save().then(() => {
-    res.json({
-      username: username,
-      description: description,
-      duration: duration,
-      date: date.toDateString(),
-      _id: userId,
+  exercise
+    .save()
+    .then(() => {
+      res.json({
+        username: username,
+        description: description,
+        duration: duration,
+        date: date,
+        _id: userId,
+      });
+    })
+    .catch((err) => {
+      console.log(err);
     });
-  });
 });
 
 app.get("/api/users", async (req, res) => {
